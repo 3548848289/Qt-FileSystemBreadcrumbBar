@@ -2,6 +2,7 @@
 #include <QWidget>
 #include <QToolButton>
 #include <QHBoxLayout>
+#include <QLineEdit>
 #include <QMenu>
 #include "BreadcrumbNodeHelper.h"
 
@@ -22,8 +23,11 @@ private:
     bool showFiles = false;
     QHBoxLayout* layout;
     QList<BreadcrumbNode*> currentPath;
+    bool editMode = false;
 
     void clearLayout();
     void rebuild();
     void populateChildren(BreadcrumbNode* node);
+    void switchToEditMode();
+    void parsePath(const QString& pathText);
 };

@@ -1,4 +1,7 @@
 #include "QBreadcrumbBar.h"
+#include <QDir>
+#include <QFileInfo>
+#include <QKeyEvent>
 
 QBreadcrumbBar::QBreadcrumbBar(QWidget* parent) : QWidget(parent) {
     layout = new QHBoxLayout(this);
@@ -25,8 +28,82 @@ void QBreadcrumbBar::clearLayout() {
     }
 }
 
+void QBreadcrumbBar::switchToEditMode() {
+    if (editMode) return;
+    editMode = true;
+    clearLayout();
+
+    QLineEdit* edit = new QLineEdit(this);
+    edit->setStyleSheet("border: none; background: transparent;");
+
+    QString fullPath;
+    if (!currentPath.isEmpty()) {
+        fullPath = currentPath.last()->fullPath;  // 只用最后节点的完整路径
+        fullPath.replace("\\", "/");              // 统一分隔符
+    }
+    edit->setText(fullPath);
+    layout->addWidget(edit);
+    edit->setFocus();
+    edit->selectAll();
+
+    // 按回车或失焦解析路径
+    connect(edit, &QLineEdit::editingFinished, this, [this, edit]() {
+        parsePath(edit->text());
+        editMode = false;
+    });
+}
+
+void QBreadcrumbBar::parsePath(const QString& pathText) {
+    QList<BreadcrumbNode*> newPath;
+
+#ifdef Q_OS_WIN
+    BreadcrumbNode* root = new BreadcrumbNode("计算机", "", true);
+    newPath.append(root);
+#endif
+
+#ifdef Q_OS_UNIX
+    // Linux/Ubuntu 下把 / 作为虚拟根
+    BreadcrumbNode* root = new BreadcrumbNode("/", "/", true);
+    newPath.append(root);
+#endif
+
+    QString p = pathText;
+    p.replace("\\", "/");
+    p = QDir::cleanPath(p);
+
+    if (!p.isEmpty() && p != "/") { // / 已经是根了
+        QStringList parts = p.split("/", Qt::SkipEmptyParts);
+        QString pathAccumulate = "/";
+
+#ifdef Q_OS_WIN
+        // 盘符处理 Windows
+        if (!parts.isEmpty() && parts[0].endsWith(":")) {
+            pathAccumulate = parts[0] + "/";
+            newPath.append(new BreadcrumbNode(parts[0], pathAccumulate));
+            parts.removeFirst();
+        }
+#endif
+
+        for (const QString& part : parts) {
+            if (!pathAccumulate.endsWith("/")) pathAccumulate += "/";
+            pathAccumulate += part;
+            // ✅ 路径存在性检查
+            if (!QFileInfo(pathAccumulate).exists()) {
+                setPath(currentPath);
+                return;
+            }
+            newPath.append(new BreadcrumbNode(part, pathAccumulate));
+        }
+    }
+
+    setPath(newPath);
+}
+
+
 void QBreadcrumbBar::rebuild() {
     clearLayout();
+
+    // if (editMode) return; // 编辑模式下不显示按钮
 
     for (int i = 0; i < currentPath.size(); ++i) {
         BreadcrumbNode* node = currentPath[i];
@@ -34,9 +111,7 @@ void QBreadcrumbBar::rebuild() {
         // 面包屑按钮
         QToolButton* btn = new QToolButton(this);
         btn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-        // btn->setAutoRaise(true);
         btn->setStyleSheet("border: none; background: transparent;");
-
         btn->setText(node->name);
 
         connect(btn, &QToolButton::clicked, this, [this, i](){
@@ -52,10 +127,8 @@ void QBreadcrumbBar::rebuild() {
         if (!node->children.isEmpty()) {
             QToolButton* sepBtn = new QToolButton(this);
             sepBtn->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-            // sepBtn->setAutoRaise(true);
             sepBtn->setStyleSheet("border: none; background: transparent;");
-
-            sepBtn->setText("/");
+            sepBtn->setText("/"); // 分隔符
             layout->addWidget(sepBtn);
 
             QMenu* menu = new QMenu(this);
@@ -78,6 +151,17 @@ void QBreadcrumbBar::rebuild() {
             });
         }
     }
+
+    // 添加占位按钮让点击进入编辑模式
+    QToolButton* editBtn = new QToolButton(this);
+    editBtn->setText(""); // 空白区域
+    editBtn->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Preferred);
+
+    editBtn->setStyleSheet("border: none; background: transparent;");
+    layout->addWidget(editBtn);
+    connect(editBtn, &QToolButton::clicked, this, [this](){
+        switchToEditMode();
+    });
 
     layout->addStretch();
 }
