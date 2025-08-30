@@ -1,7 +1,8 @@
 #include <QApplication>
 #include <QStyleHints>
 #include <QScrollArea>
-#include "QBreadcrumbBar.h"
+#include <QObject>
+#include "QFileSystemBreadcrumbBar.h"
 
 QWidget* createFileSystemDemo() {
     QWidget* window = new QWidget;
@@ -17,6 +18,8 @@ QWidget* createFileSystemDemo() {
 
     // 文件系统导航：虚拟根（显示盘符）
     BreadcrumbNode* root = new BreadcrumbNode("计算机", "", true);
+    // BreadcrumbNode* root = new BreadcrumbNode("/", "/");
+
     QList<BreadcrumbNode*> path = { root };
     breadcrumb->setPath(path);
 
@@ -33,12 +36,36 @@ QWidget* createFileSystemDemo() {
     return window;
 }
 
+QFileSystemBreadcrumbBar* createQFileSystemBreadcrumbBar() {
+    // 创建面包屑控件
+    QFileSystemBreadcrumbBar* breadcrumb = new QFileSystemBreadcrumbBar();
+    breadcrumb->setPath("C:/Windows/System32");
+    breadcrumb->bar()->setShowFiles(true);
+
+    QObject::connect(breadcrumb, &QFileSystemBreadcrumbBar::pathClicked, [](int index, const QString& name) {
+        qDebug() << "node clicked:" << name;
+    });
+
+    QObject::connect(breadcrumb, &QFileSystemBreadcrumbBar::fileClicked,[](const QString& path) {
+        qDebug() << "File clicked:" << path;
+    });
+
+    QObject::connect(breadcrumb, &QFileSystemBreadcrumbBar::pathEdited, [](const QString& path){
+        qDebug() << "path Edited:" << path;
+    });
+
+    return breadcrumb;
+}
+
+
 
 QWidget* createCustomTreeDemo() {
     QWidget* window = new QWidget;
     QHBoxLayout* layout = new QHBoxLayout(window);
 
     QBreadcrumbBar* breadcrumb = new QBreadcrumbBar();
+    breadcrumb->setAllowEditMode(false);   // ✅ 禁止进入编辑模式
+
     layout->addWidget(breadcrumb);
 
     // 自定义导航树
@@ -71,11 +98,13 @@ int main(int argc, char* argv[]) {
     QVBoxLayout* mainLayout = new QVBoxLayout(&window);
 
     // 文件系统面包屑
-    QWidget* fileSystemDemo = createFileSystemDemo();
-    mainLayout->addWidget(fileSystemDemo);
+    // QWidget* fileSystemDemo = createFileSystemDemo();
+    // QFileSystemBreadcrumbBar* bar = new QFileSystemBreadcrumbBar;
+    mainLayout->addWidget(createQFileSystemBreadcrumbBar());
 
     // 自定义逻辑树面包屑
     QWidget* customTreeDemo = createCustomTreeDemo();
+
     mainLayout->addWidget(customTreeDemo);
 
     window.resize(600, 200);

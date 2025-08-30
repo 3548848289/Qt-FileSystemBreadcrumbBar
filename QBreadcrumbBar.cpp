@@ -27,8 +27,8 @@ void QBreadcrumbBar::clearLayout() {
         delete item;
     }
 }
-
 void QBreadcrumbBar::switchToEditMode() {
+    if (!allowEditMode) return;   // ✅ 禁止编辑模式
     if (editMode) return;
     editMode = true;
     clearLayout();
@@ -38,20 +38,23 @@ void QBreadcrumbBar::switchToEditMode() {
 
     QString fullPath;
     if (!currentPath.isEmpty()) {
-        fullPath = currentPath.last()->fullPath;  // 只用最后节点的完整路径
-        fullPath.replace("\\", "/");              // 统一分隔符
+        fullPath = currentPath.last()->fullPath;
+        fullPath.replace("\\", "/");
     }
     edit->setText(fullPath);
     layout->addWidget(edit);
     edit->setFocus();
     edit->selectAll();
 
-    // 按回车或失焦解析路径
     connect(edit, &QLineEdit::editingFinished, this, [this, edit]() {
-        parsePath(edit->text());
+        QString newPath = edit->text();
+        parsePath(newPath);
         editMode = false;
+        emit pathEdited(newPath);
     });
+
 }
+
 
 void QBreadcrumbBar::parsePath(const QString& pathText) {
     QList<BreadcrumbNode*> newPath;
@@ -63,7 +66,7 @@ void QBreadcrumbBar::parsePath(const QString& pathText) {
 
 #ifdef Q_OS_UNIX
     // Linux/Ubuntu 下把 / 作为虚拟根
-    BreadcrumbNode* root = new BreadcrumbNode("/", "/", true);
+    BreadcrumbNode* root = new BreadcrumbNode("/", "/");
     newPath.append(root);
 #endif
 
@@ -117,7 +120,7 @@ void QBreadcrumbBar::rebuild() {
         connect(btn, &QToolButton::clicked, this, [this, i](){
             currentPath = currentPath.mid(0, i+1);
             rebuild();
-            emit pathClicked(i, currentPath[i]->name);
+            emit pathClicked(i, currentPath[i]->fullPath);
         });
         layout->addWidget(btn);
 
@@ -141,7 +144,7 @@ void QBreadcrumbBar::rebuild() {
                         QList<BreadcrumbNode*> newPath = currentPath.mid(0, i+1);
                         newPath.append(new BreadcrumbNode(child->name, child->fullPath, child->isVirtualRoot));
                         setPath(newPath);
-                        emit pathClicked(i+1, child->name);
+                        emit pathClicked(i+1, child->fullPath);
                     }
                 });
             }
@@ -173,6 +176,8 @@ void QBreadcrumbBar::addMenuItem(int index, const QString& text) {
     node->children.append(newChild);
     rebuild();
 }
+
+void QBreadcrumbBar::setAllowEditMode(bool value) { allowEditMode = value; }
 
 void QBreadcrumbBar::populateChildren(BreadcrumbNode* node) {
     BreadcrumbNodeHelper::populateChildren(node, showFiles);
